@@ -16,5 +16,5 @@ Summary of directory structure:
    + dev					[Directory of scripts in development (not intended for public use)]
      - [e.g. SpireHandbookBundle_CEN.py]
  + CalScripts				[Directory of HIPE scripts for making calibration products (not intended for public use)]
-   - [e.g. maksSCalPhotXXX]
+   - [e.g. makeSCalPhotXXX]
 
