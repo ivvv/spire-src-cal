@@ -50,167 +50,165 @@
 #     Gets calibration Context from pool or file, and/or checks existing cal
 #     - Inputs:
 #         cal:     [SpireCal context] Calibration Tree (optional)
+#         calTree: [string] Name of calibration tree to read from HSA (optional)
 #         calPool: [string] Name of calibration pool (optional)
 #         calFile: [string] Name of calibration file (optional)
 #     - Outputs:
-#         cal:     [SpireCal context] Calibration Tree (optional)
+#         cal:     [SpireCal context] Spire Calibration Context for Photometer
+#     - Global Variables
+#         spireCalPhot: [context] Spire Calibration Context for Photometer
+#         spireBands:   [string list] SPIRE band names ["PSW","PMW","PLW"]
 #
 #  * getSpireFreq:
-#     Gets frequency raster. Sets ref freqs, spire band names as global variable
+#     Gets frequency raster.
 #     - Inputs:
 #         NONE
 #     - Outputs:
 #         [float array] frequency raster across all bands
 #     - Global variables:
-#         spireBands [string list] SPIRE band names ["PSW","PMW","PLW"]
-#         spireRefFreqs [float dict] SPIRE reference frequencies (at 250,350,500 um)
+#         spireFreq [float array] frequency raster across all bands
+#
+#  * getSpireRefFreq:
+#     - Inputs:
+#         NONE
+#     - Outputs:
+#         [float dict] SPIRE reference frequencies (at 250,350,500 um)
+#     - Global variables:
+#         spireRefFreq [dict] SPIRE reference frequencies (1 scalar per band)
 #
 #  * getSpireFilt:
 #     Gets SPIRE filter profiles, either RSRF only or RSRF*ApEff
 #     - Inputs:
-#         cal|calPool|calFile (see getCal inputs)
-#         rsrfOnly:           [boolean] set to only outut RSRF (without Aperture Efficiency). Default=False
+#         rsrfOnly: [boolean] set to only outut RSRF (without Aperture Efficiency). Default=False
 #     - Outputs:
-#         [float dict] SPIRE filter profiles for three bands (with/without aperture efficiency)
+#         [float dict] filter profiles with/without aperture efficiency (1 per band)
+#     - Global Variables:
+#         spireFiltOnly [dict] filter profile without aperture efficiency (1 array per band)
+#         spireFilt     [dict] filter profile with aperture efficiency (1 array per band)
 #
 #  * getSpireEffFreq:
 #     Gets SPIRE effective frequencies from calibration tree
 #     - Inputs:
-#         cal|calPool|calFile (see getCal inputs)
+#         NONE
 #     - Outputs:
-#         [float dict] SPIRE effective frequencies for three bands
+#         [dict] SPIRE effective frequencies for three bands (1 scalar per band)
+#     - Global Variables:
+#         spireEffFreq: [dict] SPIRE effective frequencies (1 scalar per band)
 #
 #   * calcBeamMonoArea:
 #      Calulates monochromatic beam areas (used for many functions).
 #      Calculated for frequencies produced by getFreq
 #      - Inputs:
-#          cal|calPool|calFile (see getCal inputs)
+#          NONE
 #      - Outputs:
-#          [float array dict] SPIRE monochromatic areas for three bands
+#          [dict] SPIRE monochromatic areas (1 array per band)
 #      - Global variables:
-#          arcsec2Sr: conversion fron square arcseconds to steradians
+#          beamMonoArea [dict] SPIRE monochromatic areas (1 array per bands)
+#          arcsec2Sr: [float] conversion fron square arcseconds to steradians
 #
 #   * calcOmegaEff:
 #      Calculates effective beam area for power law spectrum.
 #      - Inputs:
-#          alphaK:              [float (list)] power law spectral index (scalar or list)
-#          beamMonoArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
-#          cal|calPool|calFile: (see getCal inputs)
+#          alphaK: [float/list] power law spectral index (scalar or list)
 #      - Outputs:
-#          [float (list) dict] SPIRE effective beam areas for SPIRE bands.
-#              If alphaK is list, output is list. Otherwise scalar
+#          [dict] SPIRE effective beam areas
+#              (if alphaK is list, 1 list per band, otherwise 1 scalar per band)
 #
 #   * calcOmegaEff_BB
 #      Calculates effective beam area for modified blackbody spectrum.
 #      - Inputs:
-#          betaK:               [float] modBB emissivity index
-#          tempK:               [float (list)] modBB temperature (scalar or list)
-#          beamMonoArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
-#          cal|calPool|calFile: (see getCal inputs)
+#          betaK: [float] modBB emissivity index
+#          tempK: [float/list)] modBB temperature (scalar or list)
 #      - Outputs:
-#          [float (list) dict] SPIRE effective beam areas for SPIRE bands.
-#              If tempK is list, output is list. Otherwise scalar
+#          [dict] SPIRE effective beam areas
+#              (if tempK is list, 1 list per band, otherwise 1 scalar per band)
 #
 #   * calcKBeam
 #      Calculates beam correction factor for power law spectrum
 #      - Inputs:
-#          alphaK: [float (list)] power law spectral index (scalar or list)
-#          beamMonoArea: monochromatic beam areas (from beamMonoArea)
-#          cal|calPool|calFile (see getCal inputs)
+#          alphaK: [float/list] power law spectral index (scalar or list)
 #      - Outputs:
-#          [float (list) dict] beam correction factor for SPIRE bands.
-#              If alphaK is list, output is list. Otherwise scalar
+#          [dict] beam correction factors
+#              (if alphaK is list, 1 list per band, otherwise 1 scalar ber band)
 #
 #   * calcKBeam_BB
 #      Calculates beam correction factor for modified blackbody spectrum.
 #      - Inputs:
-#          betaK:               [float] modBB emissivity index
-#          tempK:               [float (list)] modBB temperature (scalar or list)
-#          beamMonoArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
-#          cal|calPool|calFile: (see getCal inputs)
+#          betaK: [float] modBB emissivity index
+#          tempK: [float/list] modBB temperature (scalar or list)
 #      - Outputs:
-#          [float (list) dict] beam correction for SPIRE bands.
-#              If tempK is list, output is list. Otherwise scalar
+#          [dict] beam correction factors
+#              (if tempK is list, 1 list per band, otherwise 1 scalar per band)
 #
 #   * calcK4P
 #      Calculates K4P calibration parameter (point source flux density, alpha=-1)
 #      - Inputs:
-#          cal|calPool|calFile: (see getCal inputs)
+#          NONE
 #      - Outputs:
-#          [float dict] K4P parameter for SPIRE bands
+#          [dict] K4P parameter (1 per band)
 #
 #   * calcKMonE
 #      Calculates KMonE calibration parameter (extended source surface brightness, alpha=-1)
 #      - Inputs:
-#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
-#          cal|calPool|calFile: (see getCal inputs)
+#          NONE
 #      - Outputs:
-#          [float dict] KMonE parameter for SPIRE bands
+#          [dict] KMonE parameter for SPIRE bands (1 per band)
 #
 #   * calcK4E
 #      Calculates K4E calibration parameter (extended source flux density, alpha=-1)
 #      - Inputs:
-#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
-#          cal|calPool|calFile: (see getCal inputs)
+#          NONE
 #      - Outputs:
-#          [float dict] K4E parameter for SPIRE bands
+#          [dict] K4E parameter for SPIRE bands (1 per band)
 #
 #   * calcKPtoE
 #      Calculates KPtoE calibration parameter (point flux density -> extended surface brightness, alpha=-1)
 #      - Inputs:
-#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
-#          cal|calPool|calFile: (see getCal inputs)
+#          NONE
 #      - Outputs:
-#          [float dict] KPtoE parameter for SPIRE bands
+#          [dict] KPtoE parameter for SPIRE bands (1 per band)
 #
 #   * calcKColP
 #      Calculates KColP colour correction parameter for power law spectrum
 #      - Inputs:
-#          alphaK:              [float (list)] power law spectral index (scalar or list)
-#          cal|calPool|calFile: (see getCal inputs)
+#          alphaK: [float/list] power law spectral index (scalar or list)
 #      - Outputs:
-#          [float (list) dict] KColP colour correction for SPIRE bands
-#               If alphaK is list, output is list. Otherwise scalar
+#          [dict] KColP colour corrections
+#              (if alphaK is list, 1 list per band, otherwise 1 scalar per band)
 #
 #   * calcKColP_BB
 #      Calculates KColP colour correction parameter for modified blackbody spectrum
 #      - Inputs:
-#          betaK:               [float] modified blackbody emissivity index
-#          tempK:               [float (list)] modified black body temperature (scalar or list)
-#          cal|calPool|calFile: (see getCal inputs)
+#          betaK: [float] modified blackbody emissivity index
+#          tempK: [float/list] modified black body temperature (scalar or list)
 #      - Outputs:
-#          [float (list) dict] KColP colour correction for SPIRE bands
-#               If tempK is list, output is list. Otherwise scalar
+#          [dict] KColP colour correction for SPIRE bands
+#              (if tempK is list, 1 list per band, otherwise 1 scalar per band)
 #
 #   * calcKColE
 #      Calculates KColE colour correction parameter power law spectrum
 #      - Inputs:
-#          alphaK:              [float (list)] power law spectral index (scalar or list)
-#          cal|calPool|calFile: (see getCal inputs)
-#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#          alphaK: [float/list] power law spectral index (scalar or list)
 #      - Outputs:
-#          [float (list) dict] KColE colour correction for SPIRE bands
-#               If alphaK is list, output is list. Otherwise scalar
+#          [dict] KColE colour correction for SPIRE bands
+#              (if alphaK is list, 1 list per band, otherwise 1 scalar per band)
 #
 #   * calcKColE_BB
 #      Calculates KColE colour correction parameter for modified blackbody spectrum
 #      - Inputs:
-#          betaK:               [float] modified blackbody emissivity index
-#          tempK:               [float (list)] modified black body temperature (scalar or list)
-#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
-#          cal|calPool|calFile: (see getCal inputs)
+#          betaK: [float] modified blackbody emissivity index
+#          tempK: [float/list] modified black body temperature (scalar or list)
 #      - Outputs:
-#          [float (list) dict] KColE colour correction for SPIRE bands
-#               If tempK is list, output is list. Otherwise scalar
+#          [dict] KColE colour correction for SPIRE bands
+#              (if tempK is list, 1 list per band, otherwise 1 scalar per band)
 #  
-#  Other functions for deailing with the beam model are also included.
+#  Other functions for dealing with the beam model are also included.
 #   * spireEffArea: Calculate effective RSRF-weighted beam area for a given spectrum (power law or modified black-body)
 #   * spireMonoBeam: Calculate monochromatic beam profile & area at a given freq
 #   * spireMonoAreas: Calculate monochromatic beam areas at range of frequencies
 #   * hpXcalKcorr: Calculate K-correction parameters for given spectrum (power law or modified black body)
 #
 #===============================================================================
-# $Id: makeSCalPhotColorCorrK.py,v 1.9 2014/02/26 18:42:48 epoleham Exp $
 # 
 #  Edition History
 #   E. Polehampton   22-10-2013  - First version adapted from Andreas' script - SPCAL-83
