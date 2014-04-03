@@ -42,44 +42,172 @@
 # 
 #  Herschel-SPIRE Colour Corrections
 # 
-#  This routine calculates the colour corrections for a range of source spectra,
-#  and for both point sources and extended sources
+#  This module provides functions to calcualte the colour corrections for a
+#  range of source spectra, and for both point sources and extended sources
 # 
-#  Input:
-#    RSRF and Aperture efficiency profiles from SPIRE calibration tree
-#    Beam profiles & metadata from SPIRE calibration tree
-#    Beam colour corrections from SPIRE calibraiton tree
-#    Neptune spectral index and measured area
-#    Array of alphas and (beta,temperatures) from SPIRE calibration tree
-#    Name and version of output file
-# 
-#  Output:
-#    SCalPhotColorCorrK product
-# 
-#  Calculations:
-#   1. Reads in beam profiles, beam corrections, RSRF and aperture efficiency
-#      from calibration tree, including the values of gamma, effective beam area
-#      and the pipeline beam areas
-#   2. Calculates the point source colour corrections as a function of alpha:
-#        Kpsrc = int{ RSRF(nu) * ApEff(nu) dnu} \
-#                     int{ (nu/nu0)^alpha * RSRF(nu) * ApEff(nu) dnu}
-#      And similarly for beta, temperatyre
-#   3. Scales the monochromatic beam with frequency by exponent gamma and
-#      calculates the monochromatic beam area
-#        Beam_mono(r,nu) = Beam_full(r*(nu/nu_eff)^-gamma)
-#           (meaning that the FWHM varies as (nu/nu_eff)^gamma
-#        Omega_mono(nu) = int{Beam_mono(r,nu) * 2*pi*r dr}
-#   4. Calculates the effective beam area from beam correction
-#        Omega_eff(alpha) = Omega_eff(-1) / Kbeam(alpha)
-#   5. Computes the extended source colour corrections
-#        Kextd = Omega_eff(alpha) * int{ RSRF(nu) * ApEff(nu) dnu} \
-#              int{ (nu/nu0)^alpha * Omega_mono (nu) * RSRF(nu) * ApEff(nu) dnu}
-#      And similarly for greybody spectra for a range of betas and temperature
+#  The functions are as follows:
+#  * getCal:
+#     Gets calibration Context from pool or file, and/or checks existing cal
+#     - Inputs:
+#         cal:     [SpireCal context] Calibration Tree (optional)
+#         calPool: [string] Name of calibration pool (optional)
+#         calFile: [string] Name of calibration file (optional)
+#     - Outputs:
+#         cal:     [SpireCal context] Calibration Tree (optional)
 #
-#  There are some functions defined (common between calibration products)
+#  * getSpireFreq:
+#     Gets frequency raster. Sets ref freqs, spire band names as global variable
+#     - Inputs:
+#         NONE
+#     - Outputs:
+#         [float array] frequency raster across all bands
+#     - Global variables:
+#         spireBands [string list] SPIRE band names ["PSW","PMW","PLW"]
+#         spireRefFreqs [float dict] SPIRE reference frequencies (at 250,350,500 um)
+#
+#  * getSpireFilt:
+#     Gets SPIRE filter profiles, either RSRF only or RSRF*ApEff
+#     - Inputs:
+#         cal|calPool|calFile (see getCal inputs)
+#         rsrfOnly:           [boolean] set to only outut RSRF (without Aperture Efficiency). Default=False
+#     - Outputs:
+#         [float dict] SPIRE filter profiles for three bands (with/without aperture efficiency)
+#
+#  * getSpireEffFreq:
+#     Gets SPIRE effective frequencies from calibration tree
+#     - Inputs:
+#         cal|calPool|calFile (see getCal inputs)
+#     - Outputs:
+#         [float dict] SPIRE effective frequencies for three bands
+#
+#   * calcBeamMonoArea:
+#      Calulates monochromatic beam areas (used for many functions).
+#      Calculated for frequencies produced by getFreq
+#      - Inputs:
+#          cal|calPool|calFile (see getCal inputs)
+#      - Outputs:
+#          [float array dict] SPIRE monochromatic areas for three bands
+#      - Global variables:
+#          arcsec2Sr: conversion fron square arcseconds to steradians
+#
+#   * calcOmegaEff:
+#      Calculates effective beam area for power law spectrum.
+#      - Inputs:
+#          alphaK:              [float (list)] power law spectral index (scalar or list)
+#          beamMonoArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float (list) dict] SPIRE effective beam areas for SPIRE bands.
+#              If alphaK is list, output is list. Otherwise scalar
+#
+#   * calcOmegaEff_BB
+#      Calculates effective beam area for modified blackbody spectrum.
+#      - Inputs:
+#          betaK:               [float] modBB emissivity index
+#          tempK:               [float (list)] modBB temperature (scalar or list)
+#          beamMonoArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float (list) dict] SPIRE effective beam areas for SPIRE bands.
+#              If tempK is list, output is list. Otherwise scalar
+#
+#   * calcKBeam
+#      Calculates beam correction factor for power law spectrum
+#      - Inputs:
+#          alphaK: [float (list)] power law spectral index (scalar or list)
+#          beamMonoArea: monochromatic beam areas (from beamMonoArea)
+#          cal|calPool|calFile (see getCal inputs)
+#      - Outputs:
+#          [float (list) dict] beam correction factor for SPIRE bands.
+#              If alphaK is list, output is list. Otherwise scalar
+#
+#   * calcKBeam_BB
+#      Calculates beam correction factor for modified blackbody spectrum.
+#      - Inputs:
+#          betaK:               [float] modBB emissivity index
+#          tempK:               [float (list)] modBB temperature (scalar or list)
+#          beamMonoArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float (list) dict] beam correction for SPIRE bands.
+#              If tempK is list, output is list. Otherwise scalar
+#
+#   * calcK4P
+#      Calculates K4P calibration parameter (point source flux density, alpha=-1)
+#      - Inputs:
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float dict] K4P parameter for SPIRE bands
+#
+#   * calcKMonE
+#      Calculates KMonE calibration parameter (extended source surface brightness, alpha=-1)
+#      - Inputs:
+#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float dict] KMonE parameter for SPIRE bands
+#
+#   * calcK4E
+#      Calculates K4E calibration parameter (extended source flux density, alpha=-1)
+#      - Inputs:
+#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float dict] K4E parameter for SPIRE bands
+#
+#   * calcKPtoE
+#      Calculates KPtoE calibration parameter (point flux density -> extended surface brightness, alpha=-1)
+#      - Inputs:
+#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float dict] KPtoE parameter for SPIRE bands
+#
+#   * calcKColP
+#      Calculates KColP colour correction parameter for power law spectrum
+#      - Inputs:
+#          alphaK:              [float (list)] power law spectral index (scalar or list)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float (list) dict] KColP colour correction for SPIRE bands
+#               If alphaK is list, output is list. Otherwise scalar
+#
+#   * calcKColP_BB
+#      Calculates KColP colour correction parameter for modified blackbody spectrum
+#      - Inputs:
+#          betaK:               [float] modified blackbody emissivity index
+#          tempK:               [float (list)] modified black body temperature (scalar or list)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float (list) dict] KColP colour correction for SPIRE bands
+#               If tempK is list, output is list. Otherwise scalar
+#
+#   * calcKColE
+#      Calculates KColE colour correction parameter power law spectrum
+#      - Inputs:
+#          alphaK:              [float (list)] power law spectral index (scalar or list)
+#          cal|calPool|calFile: (see getCal inputs)
+#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#      - Outputs:
+#          [float (list) dict] KColE colour correction for SPIRE bands
+#               If alphaK is list, output is list. Otherwise scalar
+#
+#   * calcKColE_BB
+#      Calculates KColE colour correction parameter for modified blackbody spectrum
+#      - Inputs:
+#          betaK:               [float] modified blackbody emissivity index
+#          tempK:               [float (list)] modified black body temperature (scalar or list)
+#          monoBeamArea:        [float array dict] monochromatic beam areas (from beamMonoArea)
+#          cal|calPool|calFile: (see getCal inputs)
+#      - Outputs:
+#          [float (list) dict] KColE colour correction for SPIRE bands
+#               If tempK is list, output is list. Otherwise scalar
+#  
+#  Other functions for deailing with the beam model are also included.
+#   * spireEffArea: Calculate effective RSRF-weighted beam area for a given spectrum (power law or modified black-body)
 #   * spireMonoBeam: Calculate monochromatic beam profile & area at a given freq
 #   * spireMonoAreas: Calculate monochromatic beam areas at range of frequencies
-#   * hpXcalKcorr: Calculate K-correction parameters for given spectrum
+#   * hpXcalKcorr: Calculate K-correction parameters for given spectrum (power law or modified black body)
 #
 #===============================================================================
 # $Id: makeSCalPhotColorCorrK.py,v 1.9 2014/02/26 18:42:48 epoleham Exp $
@@ -90,6 +218,7 @@
 #   E. Polehampton   21-01-2014  - add table descriptions and update numbers (SPCAL-93)
 #   Chris North      18-02-2014  - updated to use full calculation instead of reading csv files
 #   Ivan Valtchanov  15-03-2014  - reformatted to functions and a script bundle to distribute with the handbook
+#   Chris North      03-04-2014  - reformatted functions to remove dependence on global variables
 #
 #===============================================================================
 import os
@@ -98,11 +227,11 @@ scriptVersionString = "SpireHandbookBundle.py $Revision: 1.0 $"
 #-------------------------------------------------------------------------------
 # Loading physical and math constants
 from herschel.share.unit import *
-h = Constant.H_PLANCK.value
-k = Constant.K_BOLTZMANN.value
-c = Constant.SPEED_OF_LIGHT.value
-arcsec2Sr = (Math.PI/(60.*60.*180))**2
-#
+
+#-------------------------------------------------------------------------------
+#===============================================================================
+#=====                           INPUT PARAMETERS                          =====
+#===============================================================================
 #-------------------------------------------------------------------------------
 
 # need the calibration tree 
@@ -111,56 +240,114 @@ cal=spireCal(pool='spire_cal_12_2')
 ## alternatively, read from jarFile
 #cal=spireCal(jarFile='spire_cal_12_2.jar')
 
-#-------------------------------------------------------------------------------
-#===============================================================================
-#=====                           INPUT PARAMETERS                          =====
-#===============================================================================
-#-------------------------------------------------------------------------------
-
 #set verbose to print more information during processing
 verbose = True
 
-#-------------------------------------------------------------------------------
-# Input parameters for colour correction
-# range of alphas to compute colour corrections for
-alphaK=[-4.,-3.5,-3.,-2.5,-2.,-1.5,-1.,-0.5,0.,0.5,1.,1.5,2.,2.5,3.,3.5,4.,4.5,5.]
-#alphaK=[-4,-1,0,2]
-# range of beta and temp to calculate colour corrections for
-betaK=[0.,0.5,1.,1.25,1.5,1.75,2.,2.5,3.]
-tempK=range(3,300)
-alphaPip=-1.
-
-
-#-------------------------------------------------------------------------------
-# Load SPIRE Beam Color Corrections
-kBeam = cal.refs["Phot"].product.refs["ColorCorrBeam"].product
-#-------------------------------------------------------------------------------
-# Load SPIRE Beam profiles
-beamProfs = cal.refs["Phot"].product.refs["RadialCorrBeam"].product
-#
-spireEffFreq = {"PSW":beamProfs.meta['freqEffPsw'].double*1.e9,\
-	"PMW":beamProfs.meta['freqEffPmw'].double*1.e9,\
-	"PLW":beamProfs.meta['freqEffPlw'].double*1.e9}
-
-alphaNep={"PSW":beamProfs.meta['alphaNeptunePsw'].double,\
-	"PMW":beamProfs.meta['alphaNeptunePsw'].double,\
-	"PLW":beamProfs.meta['alphaNeptunePsw'].double}
-# Exponent of powerlaw describing FWHM dependence on frequency
-# FWHM ~ freq**gamma
-gamma = beamProfs.meta['gamma'].double
 
 #-------------------------------------------------------------------------------
 #===============================================================================
-#=====                           DEFINE FUNCTIONS                          =====
+#=====                           SETUP FUNCTIONS                           =====
 #===============================================================================
 #-------------------------------------------------------------------------------
 
-# Set up functions to calculate beam profile, effective frequency and effective area
-# Function list:
-#   * spireMonoBeam: Calculate monochromatic beam profile and area at a given frequency
-#   * spireMonoAreas: Calculate monochromatic beam areas over a range of frequencies
-#   * hpXcalKcorr: Calculate K-correction parameters for given spectrum & source type
+def getCal(cal=None,calPool=None,calFile=None):
+    # if cal not defined, read from pool or jarFile
+    # if cal is defined, don't read anything new. Just check and return cal
+    if cal==None and calPool!=None:
+        cal=spireCal(pool=calPool)
+    if cal==None and calFile!=None:
+        cal=spireCal(jarFile=calFile)
+    assert cal.isContext(cal.__class__),\
+    	'cal is not a SpireCal Calibration Context'
 
+    return(cal)
+    
+def getSpireFreq():
+    # Frequency raster of common frequency grid spanning all three spire bands
+    deltaNu = 0.1e9		# 0.1 GHz
+    nuMin   = 300.e9
+    nuMax   = 1800.e9
+    nNu     = FIX((nuMax-nuMin)/deltaNu)
+    freq    = Double1d(range(nNu)) * deltaNu + nuMin
+
+    global spireRefFreq,spireBands,c
+    
+    c = Constant.SPEED_OF_LIGHT.value
+    spireRefWl = {"PSW":250.*1e-6, "PMW":350.*1.e-6, "PLW":500.*1.e-6}
+    spireRefFreq = {}
+    spireBands=["PSW","PMW","PLW"]
+    for band in spireBands:
+        spireRefFreq[band] = c/spireRefWl[band]
+
+    return(freq)
+
+def getSpireFilt(cal=None,calPool=None,calFile=None,rsrfOnly=False):
+
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    #read RSRF and Aperture Efficiency from calibration tree
+    rsrf=cal.getPhot().getProduct('Rsrf')
+    rsrfVersion=rsrf.getVersion()
+    if verbose:
+    	print 'Reading RSRF version %s from calibration %s'%(rsrfVersion,cal.getVersion())
+    #
+    spireFreq   = rsrf['rsrf']['frequency'].data*1e9  # Frequency in Hz
+    #indexes of freq in rsrf
+    freq=getSpireFreq()
+    nNu=len(freq)
+    #indexes of freq in RSRF
+    ixR = freq.where((freq>=MIN(spireFreq)) & (freq<=MAX(spireFreq)))
+    #
+    # spire RSRF only
+    spireFiltOnly={}
+    #interpolate to freq array
+    for band in spireBands:
+    	#create Rsrf and ApEff interpolation objects
+    	interpRsrf = LinearInterpolator(spireFreq, rsrf.getRsrf(band))
+    	#make arrays for final objects
+    	spireFiltOnly[band] = Double1d(nNu)
+    	#interpolate Rsrf to freq array
+    	spireFiltOnly[band][ixR] = interpRsrf(freq[ixR])
+
+    if rsrfOnly:
+        return(spireFiltOnly)
+    else:
+        #add in aperture efficiency
+        apertureEfficiency = cal.getPhot().getProduct('ApertureEfficiency')
+        apertureEfficiencyVersion=apertureEfficiency.getVersion()
+        if verbose:
+            print 'Reading Aperture Efficiency version %s from calibration %s'%(apertureEfficiencyVersion,cal.getVersion())
+        spireApEffFreq = apertureEfficiency.getApertEffTable()["frequency"].data * 1e9 #comes in [GHz]
+        #indexes of freq in apEff
+        ixA = freq.where((freq>=MIN(spireApEffFreq)) & (freq<=MAX(spireApEffFreq)))
+        # spire RSRF * ApEff
+        spireFilt={}
+        #interpolate to freq array and apply to RSRF
+        for band in spireBands:
+        	#create ApEff interpolation objects
+        	interpAp = LinearInterpolator(spireApEffFreq, apertureEfficiency.getApertEffTable()[band].data)
+        	#make arrays for final objects
+        	spireFilt[band] = Double1d(nNu)
+        	#copy into Rsrf*ApEff array
+        	spireFilt[band] = spireFiltOnly[band].copy()
+        	spireFilt[band][ixA] = spireFilt[band][ixA] * interpAp(freq[ixA])
+        
+        return(spireFilt)
+
+def getSpireEffFreq(cal=None,calPool=None,calFile=None):
+    #get SPIRE Effective Frequencies from metadata
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    beamProfs = cal.refs["Phot"].product.refs["RadialCorrBeam"].product
+    spireEffFreq = {"PSW":beamProfs.meta['freqEffPsw'].double*1.e9,\
+    	"PMW":beamProfs.meta['freqEffPmw'].double*1.e9,\
+    	"PLW":beamProfs.meta['freqEffPlw'].double*1.e9}
+    
+    return(spireEffFreq)
+
+#-------------------------------------------------------------------------------
+#===============================================================================
+#=====                            BEAM FUNCTIONS                           =====
+#===============================================================================
+#-------------------------------------------------------------------------------
 
 #-------------------------------------------------------------------------------
 # Calculate the effective beam area for a given spectrum (Eq. 5.34 in SPIRE Handbook v2.5)
@@ -203,6 +390,9 @@ def spireEffArea(freq, transm, monoArea, BB=False, temp=20.0, beta=1.8, alpha=-1
 	2013/12/19  C. North  initial version
 
 	"""	
+	h = Constant.H_PLANCK.value
+	k = Constant.K_BOLTZMANN.value
+	c = Constant.SPEED_OF_LIGHT.value
 	#
 	# Calculate sky background model
 	#
@@ -325,6 +515,8 @@ def spireMonoAreas(freq,beamProfs,effFreq,gamma,array,freqFact=100):
 
 	"""
 
+	arcsec2Sr = (Math.PI/(60.*60.*180))**2
+
 	#set up a sparser range of frequencies (otherwise it takes too long)
 	nNu=len(freq)
 	nNuArea=nNu/freqFact + 1
@@ -355,6 +547,13 @@ def spireMonoAreas(freq,beamProfs,effFreq,gamma,array,freqFact=100):
 	beamMonoArea=beamInterp(freq)*arcsec2Sr #in sr
 	
 	return(beamMonoArea)
+
+
+#-------------------------------------------------------------------------------
+#===============================================================================
+#=====                     COLOUR CORRECTION FUNCTION                      =====
+#===============================================================================
+#-------------------------------------------------------------------------------
 
 #-------------------------------------------------------------------------------
 # Calculate K-correction parameters for given spectrum & source type
@@ -427,6 +626,10 @@ def hpXcalKcorr(freq0, freq, transm, BB=True, temp=20.0, beta=1.8, alpha=-1.0,
 	
 	================================================================================
 	"""
+
+	h = Constant.H_PLANCK.value
+	k = Constant.K_BOLTZMANN.value
+	c = Constant.SPEED_OF_LIGHT.value
 	#
 	# Calculate sky background model
 	#
@@ -467,109 +670,6 @@ def hpXcalKcorr(freq0, freq, transm, BB=True, temp=20.0, beta=1.8, alpha=-1.0,
 	# Return the result as a 2-element array of K-correction and flux at freq0
 	return (Double1d([kWave, fSky0]))
 
-
-#-------------------------------------------------------------------------------
-#===============================================================================
-#=====                           SETUP FUNCTIONS                           =====
-#===============================================================================
-#-------------------------------------------------------------------------------
-
-def getCal(cal==None,calPool==None,calFile==None):
-    # if cal not defined, read from pool or jarFile
-    # if cal is defined, don't read anything new. Just check and return cal
-    if cal==None and calPool!=None:
-        cal=spireCal(pool=calPool)
-    if cal==None and calFile!=None:
-        cal=spireCal(jarFile=calFile)
-    assert cal.__class__==herschel.spire.ia.cal.SpireCal,\
-    	'cal is not a SpireCal Calibration Context'
-
-    return(cal)
-    
-def getSpireFreq():
-    # Frequency raster of common frequency grid spanning all three spire bands
-    deltaNu = 0.1e9		# 0.1 GHz
-    nuMin   = 300.e9
-    nuMax   = 1800.e9
-    nNu     = FIX((nuMax-nuMin)/deltaNu)
-    freq    = Double1d(range(nNu)) * deltaNu + nuMin
-    return(freq)
-    
-def getSpireRefFreq():
-	#define spire Reference Frequencies
-    spireBands=["PSW","PMW","PLW"]
-    c = Constant.SPEED_OF_LIGHT.value
-    
-    # Three SPIRE filter reference frequencies for PSW, PMW, PLW respectively
-    spireRefWl = {"PSW":250.*1e-6, "PMW":350.*1.e-6, "PLW":500.*1.e-6}
-    spireRefFreq = {}
-    for band in spireBands:
-        spireRefFreq[band] = c/spireRefWl[band]
-    return(spireRefFreq)
-
-def getSpireFilt(cal=None,calPool=None,calFile=None,rsrfOnly=False):
-
-    cal=getCal(cal)
-    #read RSRF and Aperture Efficiency from calibration tree
-    rsrf=cal.getPhot().getProduct('Rsrf')
-    rsrfVersion=rsrf.getVersion()
-    if verbose:
-    	print 'Reading RSRF version %s from calibration %s'%(rsrfVersion,cal.getVersion())
-    #
-    spireFreq   = rsrf['rsrf']['frequency'].data*1e9  # Frequency in Hz
-    #indexes of freq in rsrf
-    freq=getSpireFreq()
-    #indexes of freq in RSRF
-    ixR = freq.where((freq>=MIN(spireFreq)) & (freq<=MAX(spireFreq)))
-    #
-    # spire RSRF only
-    spireFiltOnly={}
-    #interpolate to freq array
-    spireBands=["PSW","PMW","PLW"]
-    for band in spireBands:
-    	#create Rsrf and ApEff interpolation objects
-    	interpRsrf = LinearInterpolator(spireFreq, rsrf.getRsrf(band))
-    	#make arrays for final objects
-    	spireFiltOnly[band] = Double1d(nNu)
-    	#interpolate Rsrf to freq array
-    	spireFiltOnly[band][ixR] = interpRsrf(freq[ixR])
-
-    if rsrfOnly:
-        return(spireFiltOnly)
-    else:
-        #add in aperture efficiency
-        apertureEfficiency = cal.getPhot().getProduct('ApertureEfficiency')
-        apertureEfficiencyVersion=apertureEfficiency.getVersion()
-        if verbose:
-            print 'Reading Aperture Efficiency version %s from calibration %s'%(apertureEfficiencyVersion,cal.getVersion())
-        spireApEffFreq = apertureEfficiency.getApertEffTable()["frequency"].data * 1e9 #comes in [GHz]
-        #indexes of freq in apEff
-        ixA = freq.where((freq>=MIN(spireApEffFreq)) & (freq<=MAX(spireApEffFreq)))
-        # spire RSRF * ApEff
-        spireFilt={}
-        #interpolate to freq array and apply to RSRF
-        for band in spireBands:
-        	#create ApEff interpolation objects
-        	interpAp = LinearInterpolator(spireApEffFreq, apertureEfficiency.getApertEffTable()[band].data)
-        	#make arrays for final objects
-        	spireFilt[band] = Double1d(nNu)
-        	#copy into Rsrf*ApEff array
-        	spireFilt[band] = spireFiltOnly[band].copy()
-        	spireFilt[band][ixA] = spireFilt[band][ixA] * interpAp(freq[ixA])
-
-    
-        return(spireFiltOnly)
-
-def getSpireEffFreq(cal=None,calPool=None,calFile=None):
-    #get SPIRE Effective Frequencies from metadata
-
-    cal=getCal(cal)
-    beamProfs = cal.refs["Phot"].product.refs["RadialCorrBeam"].product
-    spireEffFreq = {"PSW":beamProfs.meta['freqEffPsw'].double*1.e9,\
-    	"PMW":beamProfs.meta['freqEffPmw'].double*1.e9,\
-    	"PLW":beamProfs.meta['freqEffPlw'].double*1.e9}
-    
-    return(spireEffFreq)
 #-------------------------------------------------------------------------------
 #===============================================================================
 #=====                  CALCULATE MONOCHROMATIC BEAM AREAS                 =====
@@ -580,15 +680,16 @@ def calcBeamMonoArea(cal=None,calPool=None,calFile=None):
     #calculate monochromatic beam areas using full or simple beam treatment
     #print '\nCalculating monochromatic beam areas...'
 
-    cal=getCal(cal)
+    global arcsec2Sr
+    arcsec2Sr = (Math.PI/(60.*60.*180))**2
     
+    cal=getCal(cal)
     freq=getSpireFreq()
     beamProfs = cal.refs["Phot"].product.refs["RadialCorrBeam"].product
     gamma = beamProfs.meta['gamma'].double
-    spireEffFreq=getSpireEffFreq()
+    spireEffFreq=getSpireEffFreq(cal)
     beamMonoArea = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
 
-    spireBands=["PSW","PMW","PLW"]
     for band in spireBands:
     	#monochromatic beam areas
     	beamMonoArea[band] = spireMonoAreas(freq, beamProfs, 
@@ -596,15 +697,18 @@ def calcBeamMonoArea(cal=None,calPool=None,calFile=None):
     return beamMonoArea
 
 def calcOmegaEff(alphaK,beamMonoArea,cal=None,calPool=None,calFile=None):
-    # calculate effective beam area
-    cal=getCal()
-    spireBands=["PSW","PMW","PLW"]
+    # calculate effective beam area for power law spectrum
+
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    freq=getSpireFreq()
+    spireFiltOnly=getSpireFilt(cal,rsrfOnly=True)
+
     try:
         na=len(alphaK)
         aList=True
     except:
-        #alphaK is scalar, turn into 1-element list
         aList=False
+
     if not aList:
         # alphaK is a scalar
         beamArea = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
@@ -613,45 +717,114 @@ def calcOmegaEff(alphaK,beamMonoArea,cal=None,calPool=None,calFile=None):
         	beamArea[band]=spireEffArea(freq, spireFiltOnly[band], \
         	  beamMonoArea[band], BB=False, alpha=alphaK)/arcsec2Sr
         if (verbose): print 'Calculated Omega_eff for alpha=%f: '%alphaK,beamArea
-        return beamArea
     else:
-        beamArea = {'PSW': Double1d(na,Double.NAN),'PMW': Double1d(na,Double.NAN), 'PLW': Double1d(na,Double.NAN)}
+        # tempK is a list
+        beamArea = {'PSW': Double1d(na,Double.NaN),'PMW': Double1d(na,Double.NaN), 'PLW': Double1d(na,Double.NaN)}
         for a in range(na):
             for band in spireBands:
                 beamArea[band][a]=spireEffArea(freq, spireFiltOnly[band],\
                   beamMonoArea[band], BB=False, alpha=alphaK[a])/arcsec2Sr
-             if (verbose): print 'Calculated Omega_eff for alpha=%f: '%alphaK[a],beamArea["PSW"][a],beamArea["PMW"][a],beamArea["PLW"][a]
+            if (verbose): print 'Calculated Omega_eff for alpha=%f: '%alphaK[a],beamArea["PSW"][a],beamArea["PMW"][a],beamArea["PLW"][a]
 
-
-def calcOmegaEff_BB(betaK,tempK):
-    beamArea = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    for band in spireBands:
-    	#pipeline beam areas
-    	beamArea[band]=spireEffArea(freq, spireFiltOnly[band], \
-    	  beamMonoArea[band], BB=True, beta=betaK, temp=tempK)/arcsec2Sr
-    if (verbose): print 'Calculated Omega_eff for modBB with beta=%f and T=%f: '%(betaK,tempK),beamArea
     return beamArea
-   
-def calcKBeam(alphaK):
+
+
+def calcOmegaEff_BB(betaK,tempK,monoBeamArea,cal=None,calPool=None,calFile=None):
+    # calculate effective beam area for modified BB spectrum
+    # allows multiple temperatures, but only one beta value
+
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    freq=getSpireFreq()
+    spireFiltOnly=getSpireFilt(cal,rsrfOnly=True)
+    
+    try:
+        nt=len(tempK)
+        tList=True
+    except:
+        tList=False
+
+    if not tList:
+        # tempK is scalars
+        beamArea = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
+        for band in spireBands:
+        	#pipeline beam areas
+        	beamArea[band]=spireEffArea(freq, spireFiltOnly[band], \
+        	  beamMonoArea[band], BB=True, beta=betaK, temp=tempK)/arcsec2Sr
+        if (verbose): print 'Calculated Omega_eff for modBB with beta=%f and T=%f: '%(betaK,tempK),beamArea
+
+    else:
+        # tempK is a list
+        beamArea = {'PSW': Double1d(nt,Double.NaN), 'PMW': Double1d(nt,Double.NaN), 'PLW': Double1d(nt,Double.NaN)}
+        for t in range(nt):
+            for band in spireBands:
+            	#pipeline beam areas
+            	beamArea[band][t]=spireEffArea(freq, spireFiltOnly[band], \
+            	  beamMonoArea[band], BB=True, beta=betaK, temp=tempK[t])/arcsec2Sr
+            if (verbose): print 'Calculated Omega_eff for modBB with beta=%f and T=%f: '%(betaK,tempK[t]),beamArea["PSW"][t],beamArea["PMW"][t],beamArea["PLW"][t]
+
+    return beamArea
+       
+def calcKBeam(alphaK,monoBeamArea,cal=None,calPool=None,calFile=None):
     # Calculate pipeline colour correction parameters
-    kBeam = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    beamAreaPip = calcOmegaEff(-1.0)
-    beamEff = calcOmegaEff(alphaK)
-    for band in spireBands:
-    	#pipeline beam areas
-    	kBeam[band] = beamAreaPip[band]/beamEff[band]
-    if (verbose): print 'Calculated KBeam for alpha=%f: '%alphaK,kBeam
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    try:
+        na=len(alphaK)
+        aList=True
+    except:
+        aList=False
+
+    beamAreaPip = calcOmegaEff(-1.0,monoBeamArea,cal=cal)
+
+
+    if not aList:
+        # alphaK is a scalar
+        kBeam = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
+        beamEff = calcOmegaEff(alphaK,monoBeamArea,cal=cal)
+        for band in spireBands:
+        	#pipeline beam areas
+        	kBeam[band] = beamAreaPip[band]/beamEff[band]
+        if (verbose): print 'Calculated KBeam for alpha=%f: '%alphaK,kBeam
+    else:
+        # alphaK is a list
+        kBeam = {'PSW': Double1d(na,Double.NaN), 'PMW': Double1d(na,Double.NaN), 'PLW': Double1d(na,Double.NaN)}
+        beamEff = calcOmegaEff(alphaK,monoBeamArea,cal=cal)
+        for a in range(na):
+            for band in spireBands:
+                #pipeline beam areas
+                kBeam[band][a] = beamAreaPip[band]/beamEff[band][a]
+            if (verbose): print 'Calculated KBeam for alpha=%f: '%alphaK[a],kBeam["PSW"][a],kBeam["PMW"][a],kBeam["PLW"][a]
+
     return kBeam
 #
-def calcKBeam_BB(betaK, tempK):
+def calcKBeam_BB(betaK,tempK,monoBeamArea,cal=None,calPool=None,calFile=None):
     # Calculate pipeline colour correction parameters
-    kBeam = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    beamPip0 = calcOmegaEff(-1.0)
-    beamEff = calcOmegaEff_BB(betaK,tempK)
-    for band in spireBands:
-    	#pipeline beam areas
-    	kBeam[band] = beamAreaPip[band]/beamEff[band]
-    if (verbose): print 'Calculated KBeam for modBB with beta=%f and T=%f: '%(betaK,tempK),kBeam
+    # allows multiple temperatures, but only one beta value
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    try:
+        nt=len(tempK)
+        tList=True
+    except:
+        tList=False
+
+    beamAreaPip = calcOmegaEff(-1.0,monoBeamArea,cal=cal)
+    if not tList:
+        # tempK is scalar
+        kBeam = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
+        beamEff = calcOmegaEff_BB(betaK,tempK,monoBeamArea,cal)
+        for band in spireBands:
+        	#pipeline beam areas
+        	kBeam[band] = beamAreaPip[band]/beamEff[band]
+        if (verbose): print 'Calculated KBeam for modBB with beta=%f and T=%f: '%(betaK,tempK),kBeam
+    else:
+        # tempK is a list
+        kBeam = {'PSW': Double1d(nt,Double.NaN), 'PMW': Double1d(nt,Double.NaN), 'PLW': Double1d(nt,Double.NaN)}
+        beamEff = calcOmegaEff_BB(betaK,tempK,monoBeamArea,cal)
+        for t in range(nt):
+            for band in spireBands:
+            	#pipeline beam areas
+            	kBeam[band][t] = beamAreaPip[band]/beamEff[band][t]
+            if (verbose): print 'Calculated KBeam for modBB with beta=%f and T=%f: '%(betaK,tempK[t]),kBeam["PSW"][t],kBeam["PMW"][t],kBeam["PLW"][t]
+
     return kBeam
 
 #-----------------------------------------------------------------------
@@ -661,7 +834,11 @@ def calcKBeam_BB(betaK, tempK):
 #-----------------------------------------------------------------------
 #-----------------------------------------------------------------------
 # Calculate pipeline colour correction parameters
-def calcK4P():
+def calcK4P(cal=None,calPool=None,calFile=None):
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    freq=getSpireFreq()
+    spireFilt=getSpireFilt(cal)
+
     k4P = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
     for band in spireBands:
         k4P[band] = hpXcalKcorr(spireRefFreq[band], freq, spireFilt[band], \
@@ -669,7 +846,11 @@ def calcK4P():
         pass
     return k4P
     
-def calcKMonE():
+def calcKMonE(monoBeamArea,cal=None,calPool=None,calFile=None):
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    freq=getSpireFreq()
+    spireFilt=getSpireFilt(cal=cal)
+
     kMonE = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
     for band in spireBands:
         kMonE[band] = hpXcalKcorr(spireRefFreq[band], freq, spireFilt[band], \
@@ -677,19 +858,27 @@ def calcKMonE():
         pass
     return kMonE
 
-def calcK4E():
+def calcK4E(monoBeamArea,cal=None,calPool=None,calFile=None):
+
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    #spireBands=["PSW","PMW","PLW"]
+    arcsec2Sr = (Math.PI/(60.*60.*180))**2
+    
     k4E = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    kMonE = calcKMonE()
-    omegaEff = calcOmegaEff(-1.0)
+    kMonE = calcKMonE(monoBeamArea,cal=cal)
+    omegaEff = calcOmegaEff(-1.0,monoBeamArea,cal=cal)
     for band in spireBands:
         k4E[band] = kMonE[band] * omegaEff[band] * arcsec2Sr * 1.0e6
         pass
     return k4E
 
-def calcKPtoE():
+def calcKPtoE(monoBeamArea,cal=None,calPool=None,calFile=None):
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    #spireBands=["PSW","PMW","PLW"]
+    
     kPtoE = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    kmonE = calcKMonE()
-    k4p = calcK4P()
+    kmonE = calcKMonE(monoBeamArea,cal=cal)
+    k4p = calcK4P(cal=cal)
     for band in spireBands:
         kPtoE[band] = kmonE[band]/k4p[band]
     return kPtoE
@@ -700,33 +889,75 @@ def calcKPtoE():
 #=======================================================================
 #-----------------------------------------------------------------------
 #-----------------------------------------------------------------------
-def calcKColP(alphaK):
+def calcKColP(alphaK,cal=None,calPool=None,calFile=None):
     #print '\nCalculating point source colour correction parameters for a given alpha...'
-    # Create tables for alpha arrays for K (point source)
-    #alphaK = 2.0
-    kColP = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    k4P=calcK4P()
-    for band in spireBands:
-    	kConvPsrc=hpXcalKcorr(spireRefFreq[band],\
-    	   freq, spireFilt[band], BB=False, alpha=alphaK)[0]
-    	#point source colour correction for current alpha
-    	kColP[band] = kConvPsrc/k4P[band]
-    if (verbose): print 'Calculated KColP for alpha=%f: '%alphaK,kColP
+
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    freq=getSpireFreq()
+    spireFilt=getSpireFilt(cal=cal)
+
+    k4P=calcK4P(cal=cal)
+
+    try:
+        na=len(alphaK)
+        aList=True
+    except:
+        aList=False
+    
+    if not aList:
+        # alphaK is scalar
+        kColP = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
+        for band in spireBands:
+        	kConvPsrc=hpXcalKcorr(spireRefFreq[band],\
+        	   freq, spireFilt[band], BB=False, alpha=alphaK)[0]
+        	#point source colour correction for current alpha
+        	kColP[band] = kConvPsrc/k4P[band]
+        if (verbose): print 'Calculated KColP for alpha=%f: '%alphaK,kColP
+    else:
+        # alphaK is list
+        kColP = {'PSW': Double1d(na,Double.NaN), 'PMW': Double1d(na,Double.NaN), 'PLW': Double1d(na,Double.NaN)}
+
+        for a in range(na):
+            for band in spireBands:
+            	kConvPsrc=hpXcalKcorr(spireRefFreq[band],\
+            	   freq, spireFilt[band], BB=False, alpha=alphaK[a])[0]
+            	#point source colour correction for current alpha
+            	kColP[band][a] = kConvPsrc/k4P[band]
+            if (verbose): print 'Calculated KColP for alpha=%f: '%alphaK[a],kColP["PSW"][a],kColP["PMW"][a],kColP["PLW"][a]
     return kColP
 
-def calcKColP_BB(betaK,tempK):
+def calcKColP_BB(betaK,tempK,cal=None,calPool=None,calFile=None):
     #-----------------------------------------------------------------------
     #print 'Calculating point source colour correction parameters over beta & temp...'
-    #betaK = 2.0
-    #tempK  = 30.0 # K
-    kColPBB = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    k4P=calcK4P()
-    for band in spireBands:
-    	kConvPsrc=hpXcalKcorr(spireRefFreq[band],\
-    		freq, spireFilt[band], BB=True, beta=betaK, temp=tempK)[0]
-    	#point source colour correction for current beta,temp
-    	kColPBB[band] = kConvPsrc/k4P[band]
-    if (verbose): print 'Calculated KColP for modBB with T=%f K, beta=%f: '%(tempK,betaK),kColPBB
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    freq=getSpireFreq()
+    spireFilt=getSpireFilt(cal=cal)
+
+    k4P=calcK4P(cal=cal)
+
+    try:
+        nt=len(tempK)
+        tList=True
+    except:
+        tList=False
+    
+    if not tList:
+        kColPBB = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
+        for band in spireBands:
+        	kConvPsrc=hpXcalKcorr(spireRefFreq[band],\
+        		freq, spireFilt[band], BB=True, beta=betaK, temp=tempK)[0]
+        	#point source colour correction for current beta,temp
+        	kColPBB[band] = kConvPsrc/k4P[band]
+        if (verbose): print 'Calculated KColP for modBB with T=%f K, beta=%f: '%(tempK,betaK),kColPBB
+    else:
+        kColPBB = {'PSW': Double1d(nt,Double.NaN), 'PMW': Double1d(nt,Double.NaN), 'PLW': Double1d(nt,Double.NaN)}
+        for t in range(nt):
+            for band in spireBands:
+            	kConvPsrc=hpXcalKcorr(spireRefFreq[band],\
+            		freq, spireFilt[band], BB=True, beta=betaK, temp=tempK[t])[0]
+            	#point source colour correction for current beta,temp
+            	kColPBB[band][t] = kConvPsrc/k4P[band]
+            if (verbose): print 'Calculated KColP for modBB with T=%f K, beta=%f: '%(tempK[t],betaK),kColPBB["PSW"][t],kColPBB["PMW"][t],kColPBB["PLW"][t]
     return kColPBB
 
 #-----------------------------------------------------------------------
@@ -736,55 +967,93 @@ def calcKColP_BB(betaK,tempK):
 #-----------------------------------------------------------------------
 #-----------------------------------------------------------------------
 
-def calcKColE(alphaK):
+def calcKColE(alphaK,monoBeamArea,cal=None,calPool=None,calFile=None):
     #-----------------------------------------------------------------------
     #print '\nCalculating extended source colour correction parameters over alpha...'
-    #alphaK = 2.0
-    kColE = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    #kBeamK = calcKBeam(alphaK)
-    k4E_Tot=calcKMonE()
-    for band in spireBands:
-    	k4EaTot_x=hpXcalKcorr(spireRefFreq[band], freq,\
-    	 spireFilt[band], BB=False, alpha=alphaK,\
-    	 ext=True, monoArea=beamMonoArea[band])[0]
-    	#effBeamSr = beamAreaPipSr[band] / kBeamK[band]
-    	#total conversion
-    	#kConvExtd = \
-    	#  k4EaTot_x * effBeamSr
-    	#extended source colour correction for current alpha
-    	kColE[band] = k4EaTot_x / k4E_Tot[band]
-    if (verbose): print 'Calculated KColE for alpha=%f: '%alphaK,kColE
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    freq=getSpireFreq()
+    spireFilt=getSpireFilt(cal)
+
+    k4E_Tot=calcKMonE(beamMonoArea,cal)
+
+    try:
+        na=len(alphaK)
+        aList=True
+    except:
+        aList=False
+
+    if not aList:
+        # alphaK is scalar
+        kColE = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
+        #kBeamK = calcKBeam(alphaK)
+        for band in spireBands:
+        	k4EaTot_x=hpXcalKcorr(spireRefFreq[band], freq,\
+        	 spireFilt[band], BB=False, alpha=alphaK,\
+        	 ext=True, monoArea=beamMonoArea[band])[0]/1.e6
+        	kColE[band] = k4EaTot_x / k4E_Tot[band]
+        if (verbose): print 'Calculated KColE for alpha=%f: '%alphaK,kColE
+    else:
+        # alphaK is list
+        kColE = {'PSW': Double1d(na,Double.NaN), 'PMW': Double1d(na,Double.NaN), 'PLW': Double1d(na,Double.NaN)}
+        for a in range(na):
+            for band in spireBands:
+            	k4EaTot_x=hpXcalKcorr(spireRefFreq[band], freq,\
+            	 spireFilt[band], BB=False, alpha=alphaK[a],\
+            	 ext=True, monoArea=beamMonoArea[band])[0]/1.e6
+            	kColE[band][a] = k4EaTot_x / k4E_Tot[band]
+            if (verbose): print 'Calculated KColE for alpha=%f: '%alphaK[a],kColE["PSW"][a],kColE["PMW"][a],kColE["PLW"][a]
     return kColE
 
 #-----------------------------------------------------------------------
 
-def calcKColE_BB(betaK,tempK):
+def calcKColE_BB(betaK,tempK,monoBeamArea,cal=None,calPool=None,calFile=None):
     #
     #print 'Calculating extended source colour correction parameters over beta & temp...'
-    #betaK = 2.0
-    #tempK  = 30.0 # K
-    kColEBB = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
-    k4E_Tot=calcKMonE()
-    for band in spireBands:
-    	k4EbTot_x=hpXcalKcorr(spireRefFreq[band],\
-    		  freq, spireFilt[band], BB=True, beta=betaK, temp=tempK,\
-    		  ext=True, monoArea=beamMonoArea[band])[0]
-    	# beam correction for beta and T
-    	#kBeamK = calcKBeam_BB(betaK,tempK)
-    	kColEBB[band] = k4EbTot_x / k4E_Tot[band]
-    #
-    if (verbose): print 'Calculated KColE for modBB with T=%f K, beta=%f: '%(tempK,betaK),kColEBB
+    cal=getCal(cal=cal,calPool=calPool,calFile=calFile)
+    freq=getSpireFreq()
+    spireFilt=getSpireFilt(cal=cal)
+
+    k4E_Tot=calcKMonE(beamMonoArea,cal)
+
+    try:
+        nt=len(tempK)
+        tList=True
+    except:
+        tList=False
+
+    if not tList:
+        kColEBB = {'PSW': Double.NaN, 'PMW': Double.NaN, 'PLW': Double.NaN}
+
+        for band in spireBands:
+        	k4EbTot_x=hpXcalKcorr(spireRefFreq[band],\
+        		  freq, spireFilt[band], BB=True, beta=betaK, temp=tempK,\
+        		  ext=True, monoArea=beamMonoArea[band])[0]/1.e6
+        	kColEBB[band] = k4EbTot_x / k4E_Tot[band]
+        if (verbose): print 'Calculated KColE for modBB with T=%f K, beta=%f: '%(tempK,betaK),kColEBB
+    else:
+        kColEBB = {'PSW': Double1d(nt,Double.NaN), 'PMW': Double1d(nt,Double.NaN), 'PLW': Double1d(nt,Double.NaN)}
+        for t in range(nt):
+            for band in spireBands:
+            	k4EbTot_x=hpXcalKcorr(spireRefFreq[band],\
+            		  freq, spireFilt[band], BB=True, beta=betaK, temp=tempK[t],\
+            		  ext=True, monoArea=beamMonoArea[band])[0]/1.e6
+            	kColEBB[band][t] = k4EbTot_x / k4E_Tot[band]
+            if (verbose): print 'Calculated KColE for modBB with T=%f K, beta=%f: '%(tempK[t],betaK),kColEBB["PSW"][t],kColEBB["PMW"][t],kColEBB["PLW"][t]
     return kColEBB
+
 #
 # test for some parameters
 #
-beamMonoArea=calcBeamMonoArea()
-k4P=calcK4P()
-k4E=calcK4E()
-beamAreaPip=calcOmegaEff(alphaPip)
-result = calcOmegaEff(2.5)
-result = calcOmegaEff_BB(1.5,20.0)
-result = calcKColP(-2.0)
-result = calcKColP_BB(1.75,20.0)
-result = calcKColE(-2.0)
-result = calcKColE_BB(1.75,35.0)
+beamMonoArea=calcBeamMonoArea(cal)
+k4P=calcK4P(cal)
+k4E=calcK4E(beamMonoArea,cal)
+beamAreaPip=calcOmegaEff(-1,beamMonoArea,cal=cal)
+result = calcOmegaEff(2.5,beamMonoArea,cal)
+result = calcOmegaEff_BB(1.5,20.0,beamMonoArea,cal)
+result = calcKColP(-2.0,cal)
+result = calcKColP_BB(1.75,20.0,cal)
+result = calcKColE(-2.0,beamMonoArea,cal)
+result = calcKColE_BB(1.75,35.0,beamMonoArea,cal)
+
+result = calcKColP([-2.0,-3,-4],cal)
+result = calcKColE([-2.0,-3,-4],beamMonoArea,cal)
