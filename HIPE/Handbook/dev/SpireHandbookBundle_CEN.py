@@ -257,6 +257,8 @@ def getCal(cal=None,calPool=None,calFile=None):
         cal=spireCal(pool=calPool)
     if cal==None and calFile!=None:
         cal=spireCal(jarFile=calFile)
+    assert cal !=None,\
+    	'Must provide calibration context, or either jarFile or pool to read from'
     assert cal.isContext(cal.__class__),\
     	'cal is not a SpireCal Calibration Context'
 
