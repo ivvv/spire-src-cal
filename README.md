@@ -10,12 +10,10 @@ in the future scripts in additional languages will be added.
 
 Summary of directory structure:
 -------------------------------
- + README.md				[This file]
- + HIPE					[HIPE scripts for users]
-   + Handbook				[HIPE scripts associated with Handbook]
-     + dev				[Scripts in development, not intended for public use]
-   + SemiExtended			[HIPE Scripts for semi-extended sources]
-     + dev				[Scripts in development, not intended for public use]
- + CalScripts				[Directory of HIPE scripts for making calibration products (not intended for public use)]
-   - [e.g. makeSCalPhotXXX]
-
+ + README.md				[*This file*]
+ + HIPE					[*HIPE scripts for users*]
+   + Handbook				[*HIPE scripts associated with Handbook*]
+     + dev				*[Scripts in development, not intended for public use*]
+   + SemiExtended			[*HIPE Scripts for semi-extended sources*]
+     + dev				[*Scripts in development, not intended for public use*]
+ + CalScripts				[*Directory of HIPE scripts for making calibration products (not intended for public use)*]
