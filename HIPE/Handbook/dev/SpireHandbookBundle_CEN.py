@@ -28,15 +28,18 @@
 #  a range of emissivities. Metadata values are produced for the flux conversion
 #  parameters applied to the pipeline (the "K4P" and "K4E" parameters).
 #
+#  Note that these functions are used to calculate the values in the Handbook.
+#
 #  Input:
-#    RSRF and Aperture efficiency profiles from SPIRE calibration tree
-#    Beam profiles and beam model parameters from SPIRE calibration tree
-#    Flux conversion parameters from SPIRE calibration tree
-#    Name and version of output file
+#    SPIRE Calibration Tree, or tree name to import
+#    Requires spire_cal_12_2 or later
 #
 #  Output:
-#    SCalPhotColorCorrK_point product
-#    SCalPhotColorCorrK_extended product
+#    Functions which can be used to calculate colour correction parameters
+#    Some of them also generate global variables
+#
+#  Usage:
+#    A script is provided at the end for usage of the functions
 #
 #===============================================================================
 # 
